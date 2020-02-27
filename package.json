@@ -10,9 +10,9 @@
     "_requested": {
         "type": "tag",
         "registry": true,
-        "raw": "activedirectory2",
-        "name": "activedirectory2",
-        "escapedName": "activedirectory2",
+        "raw": "activedirectory",
+        "name": "activedirectory",
+        "escapedName": "activedirectory",
         "rawSpec": "",
         "saveSpec": null,
         "fetchSpec": "latest"
