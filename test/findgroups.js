@@ -1,142 +1,163 @@
-var assert = require('assert');
-var _ = require('underscore');
-var ActiveDirectory = require('../index');
-var config = require('./config');
+'use strict'
+/* eslint-env node, mocha */
+/* eslint-disable no-unused-expressions */
 
-describe('ActiveDirectory', function() {
-  var ad;
-  var settings = require('./settings').findGroups;
-  var timeout = 6000; // The timeout in milliseconds before a test is considered failed. 
+const expect = require('chai').expect
+const ActiveDirectory = require('../index')
+const config = require('./config')
 
-  before(function() {
-   ad = new ActiveDirectory(config);
-  });
+let server = require('./mockServer')
 
-  describe('#findGroups()', function() {
-    settings.groups.forEach(function(group) {
-      it('should return ' + (group.results || []).length + ' groups for query \'' + JSON.stringify(group.query) + '\'', function(done) {
-        this.timeout(timeout);
+describe('findGroups Method', function () {
+  let ad
+  const settings = require('./settings').findGroups
+  const timeout = 6000 // The timeout in milliseconds before a test is considered failed.
 
-        ad.findGroups(group.query, function(err, groups) {
-          if (err) return(done(err));
-          assert(groups || ((group.results || []).length === (groups || []).length));
+  before(function (done) {
+    server(function (s) {
+      ad = new ActiveDirectory(config)
+      server = s
+      done()
+    })
+  })
 
-          assert.equal((group.results || []).length, (groups || []).length);
-          (group.results || []).forEach(function(expectedGroup) {
-            var lowerCaseExpectedGroup = (expectedGroup || '').toLowerCase();
-            assert(_.any(groups || [], function(result) {
-              return(lowerCaseExpectedGroup === (result.cn || '').toLowerCase());
-            }));
-          });
-          done();
-        });
-      });
-    });
-    it('should return default group attributes when not specified', function(done) {
-      var defaultAttributes = [ 'dn', 'objectCategory', 'cn', 'description' ];
-      var group = settings.groups[0];
-      ad.findGroups(group.query, function(err, groups) {
-        if (err) return(done(err));
-        assert(groups);
+  describe('#findGroups()', function () {
+    settings.groups.forEach((group) => {
+      const len = group.results.length
+      const query = (group.query.filter) ? group.query.filter : group.query
+      it(`should return ${len} groups for query '${query}'`, function (done) {
+        this.timeout(timeout)
 
-        (groups || []).forEach(function(group) {
-          var attributes = _.keys(group) || [];
-          assert(attributes.length <= defaultAttributes.length);
-          attributes.forEach(function(attribute) {
-            var lowerCaseAttribute = (attribute || '').toLowerCase();
-            assert(_.any(defaultAttributes, function(defaultAttribute) {
-              return(lowerCaseAttribute === (defaultAttribute || '').toLowerCase());
-            }));
-          });
-        });
-        done();
-      });
-    });
-  });
+        const expectedResults = group.results
+        ad.findGroups(query, function (err, groups) {
+          expect(err).to.be.null
+          expect(groups).to.not.be.null
+          expect(Array.isArray(groups)).to.be.true
+          expect(groups.length).to.equal(len)
 
-  describe('#findGroups(opts)', function() {
-    it('should include groups/membership if opts.includeMembership[] = [ \'all\' ]', function(done) {
-      this.timeout(timeout);
+          const cns = groups.map((g) => g.cn)
+          expect(cns).to.be.any.members(expectedResults)
+          done()
+        })
+      })
+    })
 
-      var group = settings.groups[0];
-      var opts = {
+    it('should return default group attributes when not specified', function (done) {
+      const defaultAttributes = ActiveDirectory.defaultAttributes.group
+      const group = settings.groups[0]
+      ad.findGroups(group.query, function (err, groups) {
+        expect(err).to.be.null
+        expect(groups).to.not.be.null
+        expect(Array.isArray(groups)).to.be.true
+
+        groups.forEach((group) => {
+          const attributes = Object.keys(group)
+          expect(attributes.length).to.be.lte(defaultAttributes.length)
+          expect(attributes).to.be.any.members(defaultAttributes)
+        })
+
+        done()
+      })
+    })
+
+    it('should return default group attributes when no filter is specified', function (done) {
+      const defaultAttributes = ActiveDirectory.defaultAttributes.group
+      ad.findGroups({}, function (err, groups) {
+        expect(err).to.be.null
+        expect(groups).to.not.be.null
+        expect(Array.isArray(groups)).to.be.true
+
+        groups.forEach((group) => {
+          const attributes = Object.keys(group)
+          expect(attributes.length).to.be.lte(defaultAttributes.length)
+          expect(attributes).to.be.any.members(defaultAttributes)
+        })
+
+        done()
+      })
+    })
+  })
+
+  describe('#findGroups(opts)', function () {
+    it('should include groups/membership if opts.includeMembership[] = [ \'all\' ]', function (done) {
+      this.timeout(timeout)
+
+      const group = settings.groups[0]
+      const opts = {
         includeMembership: [ 'all' ],
         filter: group.query
-      };
-      ad.findGroups(opts, function(err, groups) {
-        if (err) return(done(err));
-        assert(groups);
+      }
+      ad.findGroups(opts, function (err, groups) {
+        expect(err).to.be.null
+        expect(groups).to.not.be.null
+        expect(Array.isArray(groups)).to.be.true
 
-        // Not verifying actual group results, just verifying that groups attribute
-        // exists.
-        assert(_.any(groups || [], function(group) {
-          return(group.groups);
-        }));
-        done();
-      });
-    });
-    it('should include groups/membership if opts.includeMembership[] = [ \'group\' ]', function(done) {
-      this.timeout(timeout);
+        groups.forEach((group) => {
+          expect(group.groups).to.exist
+        })
 
-      var group = settings.groups[0];
-      var opts = {
+        done()
+      })
+    })
+
+    it('should include groups/membership if opts.includeMembership[] = [ \'group\' ]', function (done) {
+      this.timeout(timeout)
+
+      const group = settings.groups[0]
+      const opts = {
         includeMembership: [ 'group' ],
         filter: group.query
-      };
-      ad.findGroups(opts, function(err, groups) {
-        if (err) return(done(err));
-        assert(groups);
+      }
+      ad.findGroups(opts, function (err, groups) {
+        expect(err).to.be.null
+        expect(groups).to.not.be.null
+        expect(Array.isArray(groups)).to.be.true
 
-        // Not verifying actual group results, just verifying that groups attribute
-        // exists. Not all groups may have groups.
-        assert(_.any(groups || [], function(group) {
-          return(group.groups);
-        }));
-        done();
-      });
-    });
-    it('should not include groups/membership if opts.includeMembership disabled', function(done) {
-      var group = settings.groups[0];
+        groups.forEach((group) => {
+          expect(group.groups).to.exist
+        })
+
+        done()
+      })
+    })
+    it('should not include groups/membership if opts.includeMembership disabled', function (done) {
+      var group = settings.groups[0]
       var opts = {
         includeMembership: false,
         filter: group.query
-      };
-      ad.findGroups(opts, function(err, groups) {
-        if (err) return(done(err));
-        assert(groups);
+      }
+      ad.findGroups(opts, function (err, groups) {
+        expect(err).to.be.null
+        expect(groups).to.not.be.null
+        expect(Array.isArray(groups)).to.be.true
 
-        // Not verifying actual group results, just verifying that groups attribute
-        // exists.
-        assert(_.all(groups || [], function(group) {
-          return(! group.groups);
-        }));
-        done();
-      });
-    });
-    it('should return only requested attributes', function(done) {
-      var group = settings.groups[0];
-      var opts = {
+        groups.forEach((group) => {
+          expect(group.groups).to.not.exist
+        })
+
+        done()
+      })
+    })
+
+    it('should return only requested attributes', function (done) {
+      const group = settings.groups[0]
+      const opts = {
         attributes: [ 'cn' ],
         filter: group.query
-      };
-      ad.findGroups(opts, function(err, groups) {
-        if (err) return(done(err));
-        assert(groups);
+      }
+      ad.findGroups(opts, function (err, groups) {
+        expect(err).to.be.null
+        expect(groups).to.not.be.null
+        expect(Array.isArray(groups)).to.be.true
 
-        (groups || []).forEach(function(group) {
-          var keys = _.keys(group) || [];
-          assert(keys.length <= opts.attributes.length);
-          if (keys.length === opts.attributes.length) {
-            assert(_.any(opts.attributes, function(attribute) {
-              return(_.any(keys, function(key) {
-                return(key === attribute);
-              }));
-            }));
-          }
-        });
-        done();
-      });
-    });
-  });
-});
+        groups.forEach((group) => {
+          const keys = Object.keys(group)
+          expect(keys.length).to.equal(opts.attributes.length)
+          expect(keys).to.be.any.members(opts.attributes)
+        })
 
+        done()
+      })
+    })
+  })
+})

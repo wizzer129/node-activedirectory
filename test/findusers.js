@@ -1,147 +1,148 @@
-var assert = require('assert');
-var _ = require('underscore');
-var ActiveDirectory = require('../index');
-var config = require('./config');
+'use strict'
+/* eslint-env node, mocha */
+/* eslint-disable no-unused-expressions */
 
-describe('ActiveDirectory', function() {
-  var ad;
-  var settings = require('./settings').findUsers;
-  var timeout = 6000; // The timeout in milliseconds before a test is considered failed. 
+const expect = require('chai').expect
+const ActiveDirectory = require('../index')
+const config = require('./config')
 
-  before(function() {
-   ad = new ActiveDirectory(config);
-  });
+let server = require('./mockServer')
 
-  describe('#findUsers()', function() {
-    settings.users.forEach(function(user) {
-      it('should return ' + (user.results || []).length + ' users for query \'' + JSON.stringify(user.query) + '\'', function(done) {
-        this.timeout(timeout);
+describe('findUsers Method', function () {
+  let ad
+  const settings = require('./settings').findUsers
+  const timeout = 6000 // The timeout in milliseconds before a test is considered failed.
 
-        ad.findUsers(user.query, function(err, users) {
-          if (err) return(done(err));
-          assert(users || ((user.results || []).length === (users || []).length));
+  before(function (done) {
+    server(function (s) {
+      ad = new ActiveDirectory(config)
+      server = s
+      done()
+    })
+  })
 
-          assert.equal((user.results || []).length, (users || []).length);
-          (user.results || []).forEach(function(expectedUser) {
-            var lowerCaseExpectedUser = (expectedUser || '').toLowerCase();
-            assert(_.any(users || [], function(result) {
-              return(lowerCaseExpectedUser === (result.cn || '').toLowerCase());
-            }));
-          });
-          done();
-        });
-      });
-    });
-    it('should return default user attributes when not specified', function(done) {
-      var defaultAttributes = [ 
-        'dn',
-        'userPrincipalName', 'sAMAccountName', 'mail',
-        'lockoutTime', 'whenCreated', 'pwdLastSet', 'userAccountControl',
-        'employeeID', 'sn', 'givenName', 'initials', 'cn', 'displayName',
-        'comment', 'description' ];
-      var user = settings.users[0];
-      ad.findUsers(user.query, function(err, users) {
-        if (err) return(done(err));
-        assert(users);
+  describe('#findUsers()', function () {
+    settings.users.forEach(function (user) {
+      const len = user.results.length
+      const query = (user.query.filter) ? user.query.filter : user.query
+      it(`should return ${len} users for query '${query}'`, function (done) {
+        this.timeout(timeout)
 
-        (users || []).forEach(function(user) {
-          var attributes = _.keys(user) || [];
-          assert(attributes.length <= defaultAttributes.length);
-          attributes.forEach(function(attribute) {
-            var lowerCaseAttribute = (attribute || '').toLowerCase();
-            assert(_.any(defaultAttributes, function(defaultAttribute) {
-              return(lowerCaseAttribute === (defaultAttribute || '').toLowerCase());
-            }));
-          });
-        });
-        done();
-      });
-    });
-  });
+        ad.findUsers(query, function (err, users) {
+          expect(err).to.be.null
+          expect(users).to.not.be.null
+          expect(Array.isArray(users)).to.be.true
+          expect(users.length).to.equal(len)
 
-  describe('#findUsers(opts)', function() {
-    it('should include groups/membership if opts.includeMembership[] = [ \'all\' ]', function(done) {
-      this.timeout(timeout);
+          const cns = users.map((u) => u.cn).join(' ')
+          user.results.forEach((expectedUser) => {
+            expect(cns).to.contain(expectedUser)
+          })
 
-      var user = settings.users[0];
-      var opts = {
+          done()
+        })
+      })
+    })
+
+    it('should return default user attributes when not specified', function (done) {
+      const defaultAttributes = ActiveDirectory.defaultAttributes.user
+      const user = settings.users[0]
+      ad.findUsers(user.query, function (err, users) {
+        expect(err).to.be.null
+        expect(users).to.not.be.null
+        expect(Array.isArray(users)).to.be.true
+
+        users.forEach((user) => {
+          const attributes = Object.keys(user)
+          expect(attributes).to.be.any.members(defaultAttributes)
+        })
+
+        done()
+      })
+    })
+  })
+
+  describe('#findUsers(opts)', function () {
+    it('should include groups/membership if opts.includeMembership[] = [ \'all\' ]', function (done) {
+      this.timeout(timeout)
+
+      const user = settings.users[0]
+      const opts = {
         includeMembership: [ 'all' ],
         filter: user.query
-      };
-      ad.findUsers(opts, function(err, users) {
-        if (err) return(done(err));
-        assert(users);
+      }
+      ad.findUsers(opts, function (err, users) {
+        expect(err).to.be.null
+        expect(users).to.not.be.null
+        expect(Array.isArray(users)).to.be.true
 
-        // Not verifying actual group results, just verifying that groups attribute
-        // exists.
-        assert(_.any(users || [], function(user) {
-          return(user.groups);
-        }));
-        done();
-      });
-    });
-    it('should include groups/membership if opts.includeMembership[] = [ \'user\' ]', function(done) {
-      this.timeout(timeout);
+        users.forEach((user) => {
+          expect(user.groups).to.exist
+        })
 
-      var user = settings.users[0];
-      var opts = {
+        done()
+      })
+    })
+
+    it('should include groups/membership if opts.includeMembership[] = [ \'user\' ]', function (done) {
+      this.timeout(timeout)
+
+      const user = settings.users[0]
+      const opts = {
         includeMembership: [ 'user' ],
         filter: user.query
-      };
-      ad.findUsers(opts, function(err, users) {
-        if (err) return(done(err));
-        assert(users);
+      }
+      ad.findUsers(opts, function (err, users) {
+        expect(err).to.be.null
+        expect(users).to.not.be.null
+        expect(Array.isArray(users)).to.be.true
 
-        // Not verifying actual group results, just verifying that groups attribute
-        // exists. Not all users may have groups.
-        assert(_.any(users || [], function(user) {
-          return(user.groups);
-        }));
-        done();
-      });
-    });
-    it('should not include groups/membership if opts.includeMembership disabled', function(done) {
-      var user = settings.users[0];
-      var opts = {
+        users.forEach((user) => {
+          expect(user.groups).to.exist
+        })
+
+        done()
+      })
+    })
+
+    it('should not include groups/membership if opts.includeMembership disabled', function (done) {
+      const user = settings.users[0]
+      const opts = {
         includeMembership: false,
         filter: user.query
-      };
-      ad.findUsers(opts, function(err, users) {
-        if (err) return(done(err));
-        assert(users);
+      }
+      ad.findUsers(opts, function (err, users) {
+        expect(err).to.be.null
+        expect(users).to.not.be.null
+        expect(Array.isArray(users)).to.be.true
 
-        // Not verifying actual group results, just verifying that groups attribute
-        // exists.
-        assert(_.all(users || [], function(user) {
-          return(! user.group);
-        }));
-        done();
-      });
-    });
-    it('should return only requested attributes', function(done) {
-      var user = settings.users[0];
-      var opts = {
+        users.forEach((user) => {
+          expect(user.groups).to.not.exist
+        })
+
+        done()
+      })
+    })
+
+    it('should return only requested attributes', function (done) {
+      const user = settings.users[0]
+      const opts = {
         attributes: [ 'cn' ],
         filter: user.query
-      };
-      ad.findUsers(opts, function(err, users) {
-        if (err) return(done(err));
-        assert(users);
+      }
+      ad.findUsers(opts, function (err, users) {
+        expect(err).to.be.null
+        expect(users).to.not.be.null
+        expect(Array.isArray(users)).to.be.true
 
-        (users || []).forEach(function(user) {
-          var keys = _.keys(user) || [];
-          assert(keys.length <= opts.attributes.length);
-          if (keys.length === opts.attributes.length) {
-            assert(_.any(opts.attributes, function(attribute) {
-              return(_.any(keys, function(key) {
-                return(key === attribute);
-              }));
-            }));
-          }
-        });
-        done();
-      });
-    });
-  });
-});
+        users.forEach((user) => {
+          const keys = Object.keys(user)
+          expect(keys.length).to.equal(opts.attributes.length)
+          expect(keys).to.be.members(opts.attributes)
+        })
 
+        done()
+      })
+    })
+  })
+})

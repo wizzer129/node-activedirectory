@@ -1,101 +1,92 @@
-var assert = require('assert');
-var _ = require('underscore');
-var ActiveDirectory = require('../index');
-var config = require('./config');
+'use strict'
+/* eslint-env node, mocha */
+/* eslint-disable no-unused-expressions */
 
-describe('ActiveDirectory', function() {
-  var ad;
-  var settings = require('./settings').findUser;
+const expect = require('chai').expect
+const ActiveDirectory = require('../index')
+const config = require('./config')
 
-  var defaultAttributes = [
-    'dn',
-    'userPrincipalName', 'sAMAccountName', 'mail',
-    'lockoutTime', 'whenCreated', 'pwdLastSet', 'userAccountControl',
-    'employeeID', 'sn', 'givenName', 'initials', 'cn', 'displayName',
-    'comment', 'description' 
-  ];
+let server = require('./mockServer')
 
-  before(function() {
-  });
+describe('Attributes', function () {
+  let ad
+  const settings = require('./settings').findUser
 
-  it('should return default user attributes when not specified', function(done) {
-    ad = new ActiveDirectory(config);
-    ad.findUser(settings.username.userPrincipalName, function(err, user) {
-      if (err) return(done(err));
-      assert(user);
+  const defaultAttributes = ActiveDirectory.defaultAttributes.user
 
-      var attributes = _.keys(user) || [];
-      assert(attributes.length <= defaultAttributes.length);
-      attributes.forEach(function(attribute) {
-        var lowerCaseAttribute = (attribute || '').toLowerCase();
-        assert(_.any(defaultAttributes, function(defaultAttribute) {
-          return(lowerCaseAttribute === (defaultAttribute || '').toLowerCase());
-        }));
-      });
-      done();
-    });
-  });
+  before(function (done) {
+    server(function (s) {
+      server = s
+      done()
+    })
+  })
 
-  it('when default attributes contains a wildcard, should return all attributes', function(done) {
-    var localConfig = _.extend({}, config, {
+  function validateAllAttrs (err, user, done) {
+    expect(err).to.be.null
+    expect(user).to.be.an('object')
+
+    const attributes = Object.keys(user)
+    expect(attributes.length).to.be.greaterThan(defaultAttributes.length)
+    done()
+  }
+
+  it('should return default user attributes when not specified', function (done) {
+    ad = new ActiveDirectory(config)
+    ad.findUser(settings.username.userPrincipalName, function (err, user) {
+      expect(err).to.be.null
+      expect(user).to.be.an('object')
+
+      const attributes = Object.keys(user)
+      expect(attributes.length).be.at.least(defaultAttributes.length)
+
+      for (let attr of attributes) {
+        expect(defaultAttributes).to.include(attr)
+      }
+      done()
+    })
+  })
+
+  it('when default attributes contains a wildcard, should return all attributes', function (done) {
+    const localConfig = Object.assign({}, config, {
       attributes: {
         user: [ '*' ]
       }
-    });
-    ad = new ActiveDirectory(localConfig);
-    ad.findUser(settings.username.userPrincipalName, function(err, user) {
-      if (err) return(done(err));
-      assert(user);
+    })
+    ad = new ActiveDirectory(localConfig)
+    ad.findUser(settings.username.userPrincipalName, function (err, user) {
+      validateAllAttrs(err, user, done)
+    })
+  })
 
-      var attributes = _.keys(user) || [];
-      assert(attributes.length > defaultAttributes.length);
-      done();
-    });
-  });
-  it('when default attributes is empty array, should return all attributes', function(done) {
-    var localConfig = _.extend({}, config, {
+  it('when default attributes is empty array, should return all attributes', function (done) {
+    const localConfig = Object.assign({}, config, {
       attributes: {
         user: [ ]
       }
-    });
-    ad = new ActiveDirectory(localConfig);
-    ad.findUser(settings.username.userPrincipalName, function(err, user) {
-      if (err) return(done(err));
-      assert(user);
+    })
+    ad = new ActiveDirectory(localConfig)
+    ad.findUser(settings.username.userPrincipalName, function (err, user) {
+      validateAllAttrs(err, user, done)
+    })
+  })
 
-      var attributes = _.keys(user) || [];
-      assert(attributes.length > defaultAttributes.length);
-      done();
-    });
-  });
-
-  it('when opts.attributes contains a wildcard, should return all attributes', function(done) {
-    var opts = {
+  it('when opts.attributes contains a wildcard, should return all attributes', function (done) {
+    const opts = {
       attributes: [ '*' ]
-    };
-    ad = new ActiveDirectory(config);
-    ad.findUser(opts, settings.username.userPrincipalName, function(err, user) {
-      if (err) return(done(err));
-      assert(user);
+    }
+    ad = new ActiveDirectory(config)
+    ad.findUser(opts, settings.username.userPrincipalName, function (err, user) {
+      validateAllAttrs(err, user, done)
+    })
+  })
 
-      var attributes = _.keys(user) || [];
-      assert(attributes.length > defaultAttributes.length);
-      done();
-    });
-  });
-  it('when opts.attributes is empty array, should return all attributes', function(done) {
-    var opts = {
+  it('when opts.attributes is empty array, should return all attributes', function (done) {
+    const opts = {
       attributes: [ ]
-    };
-    ad = new ActiveDirectory(config);
-    ad.findUser(opts, settings.username.userPrincipalName, function(err, user) {
-      if (err) return(done(err));
-      assert(user);
-
-      var attributes = _.keys(user) || [];
-      assert(attributes.length > defaultAttributes.length);
-      done();
-    });
-  });
-});
-
+    }
+    ad = new ActiveDirectory(config)
+    ad.findUser(opts, settings.username.userPrincipalName, function (err, user) {
+      validateAllAttrs(err, user, done)
+    })
+  })
+})
